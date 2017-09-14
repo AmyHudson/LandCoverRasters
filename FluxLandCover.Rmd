@@ -1,0 +1,321 @@
+---
+title: "FluxLandCover"
+author: "Amy Hudson"
+date: "6/8/2017"
+output: html_document
+---
+
+## Using Raster Buffer Files to overlap with Land Cover Raster and identify how many different Land cover pixels there are in each buffer
+
+```{r libraries, include=FALSE}
+library(ggplot2)
+library(raster)
+library(sp)
+library(rgdal)
+library(rasterVis)
+library(plyr)
+
+```
+
+
+
+```{r LC}
+LC <- raster("MOD12Q1IGBP_GEO_1km.tif") #IGBP
+my_col = terrain.colors(n = 16) #rev(terrain.colors(n = 16)) #) 0 is evergreen, 16 is barren
+
+plot(LC,
+     main="Land Cover",
+     col=my_col)
+
+## plot categorical data
+#levelplot(LC, col.regions=rev(terrain.colors(16)), xlab="", ylab="", main = "Land Cover")
+
+
+
+```
+```{r}
+maskname=c('SW_FLUX_Buffer30minG6_1km_GEO.tif')
+buff <- raster(maskname) #values are ranging from 0 to 22 and are supposed to represent the site number
+buff[buff==0] <- NA
+count(buff@data@values)$x # This says site 1 has 1894 pixels, whereas the others only have 1634.
+count(buff@data@values)$freq
+plot(buff)
+
+buff <- raster(maskname)
+
+#now trying to only look at site 1
+buff[buff!=1] <- NA
+plot(buff)
+# Count frequency of landcover types
+
+LCsite <- mask(LC,buff)
+LCsite[LCsite<1] <- NA
+
+plot(LCsite,xlim = c(-111,-110),ylim = c(31,32))
+
+count(LCsite@data@values)$x
+count(LCsite@data@values)$freq
+
+#count(LCsite@data@values)$freq[7]/sum(count(LCsite@data@values)$freq[1:11]) #% of total pixels 7 land cover is. 
+# 7 is 55%
+# 10 is 37%
+
+# 1887 pixels 
+
+```
+```{r}
+maskname=c('SW_FLUX_Buffer3kmG6_1km_GEO.tif')
+
+buff <- raster(maskname)
+
+buff[buff!=1] <- NA
+
+# Count frequency of landcover types
+
+LCsite <- mask(LC,buff)
+LCsite[LCsite<1] <- NA
+plot(LCsite,xlim = c(-111,-110),ylim = c(31,32))
+
+count(LCsite@data@values)$x
+count(LCsite@data@values)$freq
+sum(count(LCsite@data@values)$freq[1:8]) #259 pixels 
+
+
+count(LCsite@data@values)$freq[7]/sum(count(LCsite@data@values)$freq[1:11])
+# 7 is 68/259 26%
+# 10 is 166/259 64%
+
+
+```
+
+```{r}
+maskname=c('SW_FLUX_Buffer3kmG6_1km_GEO.tif')
+buff <- raster(maskname)
+buff[buff==0] <- NA
+count(buff@data@values)$x
+count(buff@data@values)$freq
+
+buff[buff==0] <- NA
+
+# Count frequency of landcover types
+
+LCsite <- mask(LC,buff)
+LCsite[LCsite<1] <- NA
+plot(LCsite)#,xlim = c(-111,-110),ylim = c(31,32))
+
+count(LCsite@data@values)$x
+count(LCsite@data@values)$freq
+sum(count(LCsite@data@values)$freq[1:8]) #259 pixels 
+
+
+count(LCsite@data@values)$freq[7]/sum(count(LCsite@data@values)$freq[1:11])
+# 7 is 68/259 26%
+# 10 is 166/259 64%
+
+```
+
+
+```{r Buffers}
+#Import Buffer files
+
+masknames=c('SW_FLUX_Buffer3kmG1_1km_GEO.tif',
+            'SW_FLUX_Buffer3kmG2_1km_GEO.tif',
+            'SW_FLUX_Buffer3kmG3_1km_GEO.tif',
+            'SW_FLUX_Buffer3kmG4_1km_GEO.tif',
+            'SW_FLUX_Buffer3kmG5_1km_GEO.tif',
+            'SW_FLUX_Buffer3kmG6_1km_GEO.tif',
+            'SW_FLUX_Buffer3kmG7_1km_GEO.tif',
+            'SW_FLUX_Buffer30minG1_1km_GEO.tif',
+            'SW_FLUX_Buffer30minG2_1km_GEO.tif',
+            'SW_FLUX_Buffer30minG3_1km_GEO.tif',
+            'SW_FLUX_Buffer30minG4_1km_GEO.tif',
+            'SW_FLUX_Buffer30minG5_1km_GEO.tif',
+            'SW_FLUX_Buffer30minG6_1km_GEO.tif',
+            'SW_FLUX_Buffer30minG7_1km_GEO.tif')
+
+#for (j in 1:length(masknames)){
+  for (j in 1:1){
+buff <- raster(masknames[j])
+buffna <- calc(buff, fun=function(x){ x[x == 0 ] <- NA; return(x)} )
+z <- as.integer(levels(factor(buffna@data@values)))
+
+#for (i in 1:length(z)){
+for (i in 1){
+  
+buffsite <- calc(buff, fun=function(x){ x[x !=  z[i]] <- NA; return(x)} )
+
+# Count frequency of landcover types
+
+LCsite <- mask(LC,buffsite)
+sumtable <- matrix(NA,nrow = length(count(LCsite@data@values)$x) , ncol = 3)
+sumtable<- 
+  cbind(rep(z[i],length(count(LCsite@data@values)$x)),
+      count(LCsite@data@values)$x,
+      count(LCsite@data@values)$freq)
+sumtable <- data.frame(sumtable)
+#colnames(sumtable) <- c('Site_Number','Land_Cover_Type','Pixel_Frequency')
+#write.table(sumtable,"LCsites.csv", append = T)
+}
+}
+
+# Created a file LCsites.csv which I opened and formated to remove headers and organize by 3km and 30min buffer sizes. I then import modified LCsites.csv in next chunk
+
+```
+
+## Create Land Cover Type Bar graphs by Site and Buffer Size
+
+```{r readLCsites}
+## Read in LCsites file (edited to insert 3km & 30min descriptors)
+LCsites <- read.csv("LCsites.csv",header = T)
+colnames(LCsites) <- c('Buffer_Size','Site_Number','Land_Cover_Type','Pixel_Freq')
+LCsites <- LCsites[complete.cases(LCsites),]
+print(LCsites)
+```
+
+```{r lcbargraphs, echo=FALSE}
+## Read in LCsites file (edited to insert 3km & 30min descriptors)
+LCsites <- read.csv("LCsites.csv",header = T)
+colnames(LCsites) <- c('Buffer_Size','Site_Number','Land_Cover_Type','Pixel_Freq')
+LCsites <- LCsites[complete.cases(LCsites),]
+LCsites$Land_Cover_Type <- as.factor(LCsites$Land_Cover_Type)
+LC3km <- LCsites[LCsites$Buffer_Size == 3,]
+LC30min <- LCsites[LCsites$Buffer_Size == 30,]
+
+ggplot(data = LC3km,aes(x= Site_Number, y = Pixel_Freq, fill = Land_Cover_Type)) +
+  geom_bar(stat="identity") + ggtitle("Buffer 3km")
+
+LC3km <- LC3km[LC3km$Site_Number != 1,]
+ggplot(data = LC3km,aes(x= Site_Number, y = Pixel_Freq, fill = Land_Cover_Type)) +
+  geom_bar(stat="identity") + 
+  ggtitle("Buffer 3km") +
+  scale_fill_manual(values = c("#89C5DA", "#DA5724", "#74D944", "#CE50CA", "#3F4921","#5F7FC7", "#CBD588","#C0717C", "#508578",   "#D3D93E", "#38333E","#673770", "#D7C1B1", "#689030", "#AD6F3B", "#CD9BCD", 
+"#D14285", "#6DDE88", "#652926", "#7FDCC0", "#C84248", "#8569D5", "#5E738F", "#D1A33D", 
+"#8A7C64", "#599861"))
+  #scale_color_discrete(my_col)
+
+# format 0-16 as factor and discrete color ramp
+
+```
+```{r lcbargraphs2, echo=FALSE}
+ggplot(data = LC30min,aes(x= Site_Number, y = Pixel_Freq, fill = Land_Cover_Type)) +
+  geom_bar(stat="identity") + ggtitle("Buffer 30min")
+
+LC30min <- LC30min[LC30min$Site_Number != 1,]
+ggplot(data = LC30min,aes(x= Site_Number, y = Pixel_Freq, fill = Land_Cover_Type)) +
+  geom_bar(stat="identity") + 
+  ggtitle("Buffer 30min") +
+  scale_color_discrete(my_col)
+
+```
+
+#Site 1 is still problematic so I move on to making my own buffer files. 
+
+```{r AUD, echo=FALSE}
+# Because site 1 is miss represented in the files Bill sent, I'll be just grabbing the land cover raster, and making my 2 buffer files for that one site
+
+#Find the Centroid Point
+#Cut the buffer from the Centroid point
+
+library(raster)
+
+LC <- raster("MOD12Q1IGBP_GEO_1km.tif") #IGBP
+my_col = terrain.colors(n = 16) #rev(terrain.colors(n = 16)) #) 0 is evergreen, 16 is barren
+
+plot(LC,
+     main="Land Cover",
+     col=my_col)
+
+LCAUD3 <- LC
+
+bufAUD3 <- buffer(LCAUD3,width = )
+
+library(raster)
+library(rgeos)
+# site is at 31.5907, -110.5092 ... convert to raster space?
+
+library(sp)
+library(rgdal)
+x = -110.5092
+y = 31.5907
+pts = c(x,y)
+colnames(pts) <- c('x','y')
+coordinates <- ~x+y
+
+points <- SpatialPoints(cbind(704000, 3162000))
+pbuf <- gBuffer(points, width=1000)
+buf <- mask(raster, pbuf)
+buffer <- trim(buf, pad=2)
+
+#from NEON files?
+library(raster)
+raster <- raster(system.file(“ascfiles/elevation.asc”, package=”adehabitat”))
+r1 <- raster(f)
+points <- cbind(704000, 3162000)
+r2 <- rasterize(points, r1, field=1)
+pbuf <- buffer(r2, width=1000)
+buf <- mask(raster, pbuf)
+buffer <- trim(buf, pad=2)
+
+
+
+```
+
+```{r}
+library(raster)
+f<-system.file("ascfiles/elevation.asc", package="adehabitat")
+raster<-rasterbis<-raster(f)# read example file from adehabitat folder
+plot(raster)# have a look
+rasterbis[]<-NA # empty one of the rasters
+points<-data.frame(704000, 3162000);names(points)<-c("x","y")# create coordinates of a sample point
+cell<-cellFromXY(object=raster,xy=points[1,])# get the cell number corresponding to that sample point
+radius<-1000 # set the buffer radius
+rasterbis[cell]<-1 # set the value of the corresponding cell to 1 (the others remaining NAs)
+plot(raster)
+points(points$x,points$y,pch=3)# one more look...
+buf <- buffer(rasterbis, width=radius) # buffer extraction per se
+plot(buf)
+p<-which(buf[]==1) # identify which cells belong to the buffer
+buf[p]<-raster[p]# pick up original values
+# Now we crop the buffer :
+xmin<-points$x[1] - 2*radius
+xmax<-points$x[1] + 2*radius
+ymin<-points$y[1] - 2*radius
+ymax<-points$y[1] + 2*radius
+ev<-c(xmin, xmax, ymin, ymax)
+e<-extent(ev)
+buffer<-crop(buf,e) # that's it :
+plot(buffer)
+points(points$x,points$y,pch=3)
+```
+
+```{r}
+# Load needed packages
+library(raster)
+library(rgdal)
+library(dplyr)
+
+# Method 3:shapefiles
+library(maptools)
+
+# plotting
+library(ggplot2)
+
+# import the centroid data and the vegetation structure data
+# this means all strings of letter coming in will remain character 
+options(stringsAsFactors=FALSE)
+
+# read in plot centroids
+
+# Land cover raster alread imported; LC
+LC@crs
+
+centroids <- data.frame()
+
+centroid_spdf = SpatialPointsDataFrame(data.frame(), 
+                                       proj4string=chm@crs, 
+                                       centroids)
+
+
+
+```
+
